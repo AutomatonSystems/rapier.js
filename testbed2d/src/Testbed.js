@@ -7,7 +7,7 @@ class SimulationParameters {
     constructor(backends, builders) {
         this.backend = 'rapier';
         this.prevBackend = 'rapier';
-        this.demo = 'cubes';
+        this.demo = 'collision groups';
         this.numVelocityIter = 4;
         this.numPositionIter = 1;
         this.running = true;
@@ -30,103 +30,22 @@ function canSetPosIters(backend) {
     return backend == "rapier" || backend == "box2d.js" || backend == "box2d.wasm";
 }
 
-/*
- * To use our testbed the user has to load Rapier, initialize
- * the Rapier physics world. Then the testbed will take this word
- * and convert it to an abstract description of its content to
- * send it to a web worker. And this web worker will re-build
- * the Rapier physics world. So basically we are doing two
- * conversion:
- *
- * Rapier -> abstract descripton -> Rapier
- *
- * This may sound silly as it would be easier to just have the user
- * write the abstract description directly and pass it to the testbed.
- * But we don't do this because we want our demos to be examples on
- * how one can create a Rapier world. That way one can refer to
- * there examples to see how some things can be done.
- */
-function extractWorldDescription(world, bodies, colliders, joints) {
-    let metaWorld = {
-        maxVelocityIterations: world.maxVelocityIterations,
-        maxPositionIterations: world.maxPositionIterations,
-    };
-
-    let metaBodies = bodies.map(body => {
-        let pos = body.translation();
-
-        return {
-            handle: body.handle,
-            type: body.bodyStatus(),
-            translation: pos,
-            mass: body.mass()
-        };
-    });
-
-    let metaColliders = colliders.map(coll => {
-        let meta = {
-            handle: coll.handle,
-            parentHandle: coll.parent(),
-            type: coll.shapeType(),
-            radius: coll.radius(),
-            density: coll.density(),
-            friction: coll.friction(),
-        };
-
-        let he = coll.halfExtents();
-        if (!!he) {
-            meta.halfExtents = {x: he.x, y: he.y};
-        }
-
-        return meta;
-    });
-
-    let metaJoints = !joints ? [] : joints.map(joint => {
-        let a1 = joint.anchor1();
-        let a2 = joint.anchor2();
-        let ax1 = joint.axis1() || {x: 0.0, y: 0.0};
-        let ax2 = joint.axis2() || {x: 0.0, y: 0.0};
-        // let fx1 = joint.frameX1() || { x: 0.0, y: 0.0, z: 0.0, w: 1.0 };
-        // let fx2 = joint.frameX2() || { x: 0.0, y: 0.0, z: 0.0, w: 1.0 };
-
-        return {
-            handle1: joint.bodyHandle1(),
-            handle2: joint.bodyHandle2(),
-            type: joint.type(),
-            anchor1: {x: a1.x, y: a1.y},
-            anchor2: {x: a2.x, y: a2.y},
-            axis1: {x: ax1.x, y: ax1.y},
-            axis2: {x: ax2.x, y: ax2.y},
-            // frameX1: { x: fx1.x, y: fx1.y, z: fx1.z, w: fx1.w },
-            // frameX2: { x: fx2.x, y: fx2.y, z: fx2.z, w: fx2.w },
-        };
-    });
-
-    return {
-        world: metaWorld,
-        bodies: metaBodies,
-        colliders: metaColliders,
-        joints: metaJoints,
-
-    }
-}
-
 export class Testbed {
     constructor(RAPIER, builders, worker) {
         let backends = [
             "rapier",
-            "matter.js",
-            "planck.js",
-            "box2d.js",
-            "box2d.wasm"
+            // "matter.js",
+            // "planck.js",
+            // "box2d.js",
+            // "box2d.wasm"
         ];
+        this.RAPIER = RAPIER;
         let parameters = new SimulationParameters(backends, builders);
         this.gui = new Gui(this, parameters);
         this.graphics = new Graphics();
         this.inhibitLookAt = false;
         this.parameters = parameters;
         this.worker = worker;
-        this.RAPIER = RAPIER;
         this.demoToken = 0;
         this.switchToDemo(builders.keys().next().value);
 
@@ -145,16 +64,18 @@ export class Testbed {
 
             let now = new Date().getTime();
             let stepMessage = this.stepMessage();
+            ;
+            let timestepTimeMS = this.world.timestep * 1000 * 0.75;
 
             /// Don't step the physics world faster than the real world.
-            if (now - this.lastMessageTime >= this.world.timestep * 1000) {
+            if (now - this.lastMessageTime >= timestepTimeMS) {
                 this.worker.postMessage(stepMessage);
                 this.lastMessageTime = now;
             } else {
                 setTimeout(() => {
                     this.worker.postMessage(stepMessage);
                     this.lastMessageTime = new Date().getTime();
-                }, now - this.lastMessageTime);
+                }, timestepTimeMS - (now - this.lastMessageTime));
             }
         };
     }
@@ -176,26 +97,22 @@ export class Testbed {
         return res;
     }
 
-    setWorld(world, bodies, colliders, joints) {
+    setWorld(world) {
         this.world = world;
         this.world.maxVelocityIterations = this.parameters.numVelocityIter;
         this.world.maxPositionIterations = this.parameters.numPositionIter;
         this.demoToken += 1;
-        this.bodies = bodies;
-        this.colliders = colliders;
-        this.joints = !!joints ? joints : new Array();
         this.gui.resetTiming();
 
-        colliders.forEach((coll, i, arr) => {
+        world.forEachCollider(coll => {
             this.graphics.addCollider(this.RAPIER, world, coll);
         });
 
-        let desc = extractWorldDescription(world, bodies, colliders, joints);
         let message = {
             type: 'setWorld',
             backend: this.parameters.backend,
             token: this.demoToken,
-            ...desc,
+            world: world.takeSnapshot()
         };
         this.worker.postMessage(message);
         this.worker.postMessage(this.stepMessage());

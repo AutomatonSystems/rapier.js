@@ -13,7 +13,6 @@ export class RapierBackend {
                 this.colliderMap.delete(collider);
             }
 
-            this.bodyRevMap.delete(raBody.handle);
             this.bodyMap.delete(handle);
             this.world.removeRigidBody(raBody);
         }
@@ -21,15 +20,13 @@ export class RapierBackend {
 
     addRigidBody(body) {
         let bodyDesc = new this.RAPIER.RigidBodyDesc(body.type)
-            .setTranslation(body.translation)
-            .setLinvel(body.linvel)
+            .setTranslation(body.translation.x, body.translation.y, body.translation.z)
+            .setLinvel(body.linvel.x, body.linvel.y, body.linvel.z)
             .setAngvel(body.angvel)
             .setLinearDamping(body.linearDamping)
             .setAngularDamping(body.angularDamping);
         let raBody = this.world.createRigidBody(bodyDesc);
-
         this.bodyMap.set(body.handle, raBody);
-        this.bodyRevMap.set(raBody.handle, body.handle);
     }
 
     addCollider(coll) {
@@ -70,9 +67,9 @@ export class RapierBackend {
                 hh = coll.halfHeight;
                 colliderDesc = this.RAPIER.ColliderDesc.cone(hh, r);
                 break;
-            case this.RAPIER.ShapeType.Trimesh:
-                let vertices = coll.trimeshVertices;
-                let indices = coll.trimeshIndices;
+            case this.RAPIER.ShapeType.TriMesh:
+                let vertices = coll.vertices;
+                let indices = coll.indices;
                 colliderDesc = this.RAPIER.ColliderDesc.trimesh(vertices, indices);
                 break;
             case this.RAPIER.ShapeType.HeightField:
@@ -93,7 +90,6 @@ export class RapierBackend {
         }
 
         this.colliderMap.set(coll.handle, raCollider);
-        this.colliderRevMap.set(raCollider.handle, coll.handle);
     }
 
     addJoint(joint) {
@@ -104,45 +100,46 @@ export class RapierBackend {
 
         switch (joint.type) {
             case this.RAPIER.JointType.Ball:
-                anchor1 = joint.anchor1;
-                anchor2 = joint.anchor2;
-                raAnchor1 = new this.RAPIER.Vector3(anchor1.x, anchor1.y, anchor1.z);
-                raAnchor2 = new this.RAPIER.Vector3(anchor2.x, anchor2.y, anchor2.z);
-                raJointParams = this.RAPIER.JointParams.ball(raAnchor1, raAnchor2);
+                raJointParams = this.RAPIER.JointParams.ball(joint.anchor1, joint.anchor2);
                 break;
             case this.RAPIER.JointType.Revolute:
-                anchor1 = joint.anchor1;
-                anchor2 = joint.anchor2;
-                let axis1 = joint.axis1;
-                let axis2 = joint.axis2;
-                raAnchor1 = new this.RAPIER.Vector3(anchor1.x, anchor1.y, anchor1.z);
-                raAnchor2 = new this.RAPIER.Vector3(anchor2.x, anchor2.y, anchor2.z);
-                let raAxis1 = new this.RAPIER.Vector3(axis1.x, axis1.y, axis1.z);
-                let raAxis2 = new this.RAPIER.Vector3(axis2.x, axis2.y, axis2.z);
-                raJointParams = this.RAPIER.JointParams.revolute(raAnchor1, raAxis1, raAnchor2, raAxis2);
+                raJointParams = this.RAPIER.JointParams.revolute(
+                    joint.anchor1,
+                    joint.axis1,
+                    joint.anchor2,
+                    joint.axis2
+                );
+                break;
+            case this.RAPIER.JointType.Fixed:
+                raJointParams = this.RAPIER.JointParams.fixed(
+                    joint.anchor1,
+                    joint.frameX1,
+                    joint.anchor2,
+                    joint.frameX2,
+                );
+                break;
+            case this.RAPIER.JointType.Prismatic:
+                raJointParams = this.RAPIER.JointParams.prismatic(
+                    joint.anchor1,
+                    joint.axis1,
+                    joint.tangent1,
+                    joint.anchor2,
+                    joint.axis2,
+                    joint.tangent2,
+                );
+                raJointParams.limitsEnabled = joint.limitsEnabled;
+                raJointParams.limits = [joint.limitsMin, joint.limitsMax];
                 break;
         }
 
         this.world.createJoint(raJointParams, raBody1, raBody2);
     }
 
-    constructor(RAPIER, world, bodies, colliders, joints) {
+    constructor(RAPIER) {
         this.colliderMap = new Map();
         this.bodyMap = new Map();
-        this.colliderRevMap = new Map();
-        this.bodyRevMap = new Map();
-        let gravity = world.gravity;
-        let raWorld = new RAPIER.World(gravity);
-        this.world = raWorld;
         this.events = new RAPIER.EventQueue(true);
         this.RAPIER = RAPIER;
-
-        raWorld.maxVelocityIterations = world.maxVelocityIterations;
-        raWorld.maxPositionIterations = world.maxPositionIterations;
-
-        bodies.forEach(body => this.addRigidBody(body));
-        colliders.forEach(coll => this.addCollider(coll));
-        joints.forEach(joint => this.addJoint(joint));
     }
 
     applyModifications(modifications) {
@@ -176,7 +173,10 @@ export class RapierBackend {
         if (!!this.RAPIER && !!snapshot) {
             const oldWorld = this.world;
             this.world = this.RAPIER.World.restoreSnapshot(snapshot);
-            oldWorld.free();
+
+            if (!!oldWorld) {
+                oldWorld.free();
+            }
 
             // Restoring the snapshot creates a new physics world, so this
             // invalidates all our internal references to bodies, colliders, and joints.
@@ -184,14 +184,13 @@ export class RapierBackend {
             this.bodyMap = new Map();
 
             this.world.forEachCollider(collider => {
-                let externalHandle = this.colliderRevMap.get(collider.handle);
-                this.colliderMap.set(externalHandle, collider);
+                this.colliderMap.set(collider.handle, collider);
             });
 
             this.world.forEachRigidBody(body => {
-                let externalHandle = this.bodyRevMap.get(body.handle);
-                this.bodyMap.set(externalHandle, body);
+                this.bodyMap.set(body.handle, body);
             });
+            console.log("Restoring snapshot.");
         }
     }
 

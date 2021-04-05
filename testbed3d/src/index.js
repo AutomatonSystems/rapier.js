@@ -1,25 +1,29 @@
 import {Testbed} from './Testbed';
-import * as Primitives from './demos/primitives'
-import * as Balls from './demos/balls'
+import * as Trimesh from './demos/trimesh'
+import * as CollisionGroups from './demos/collisionGroups'
 import * as Pyramid from './demos/pyramid'
 import * as Keva from './demos/keva'
-import * as BallJoints from './demos/ball_joints'
-import * as RevoluteJoints from './demos/revolute_joints'
+import * as Joints from './demos/joints'
 import * as Fountain from './demos/fountain'
 import * as Damping from './demos/damping'
 import * as Heightfield from './demos/heightfield'
+import * as LockedRotations from './demos/lockedRotations'
+import * as ConvexPolyhedron from './demos/convexPolyhedron'
+import * as CCD from './demos/ccd'
 
 import('@dimforge/rapier3d').then(RAPIER => {
     let builders = new Map([
-        ['primitives', Primitives.initWorld],
-        ['balls', Balls.initWorld],
+        ['collision groups', CollisionGroups.initWorld],
+        ['convex polyhedron', ConvexPolyhedron.initWorld],
+        ['CCD', CCD.initWorld],
         ['damping', Damping.initWorld],
         ['fountain', Fountain.initWorld],
         ['heightfield', Heightfield.initWorld],
-        ['joints: ball', BallJoints.initWorld],
-        ['joints: revolute', RevoluteJoints.initWorld],
+        ['joints', Joints.initWorld],
         ['keva tower', Keva.initWorld],
+        ['locked rotations', LockedRotations.initWorld],
         ['pyramid', Pyramid.initWorld],
+        ['triangle mesh', Trimesh.initWorld],
     ]);
     let worker = new Worker("worker.js");
     let testbed = new Testbed(RAPIER, builders, worker);

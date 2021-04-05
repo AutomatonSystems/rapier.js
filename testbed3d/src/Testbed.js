@@ -1,6 +1,5 @@
 import {Graphics} from './Graphics'
 import {Gui} from './Gui'
-import {extractWorldDescription} from './PhysicsDescription'
 
 const PHYSX_BACKEND_NAME = "physx.release.wasm";
 
@@ -8,7 +7,7 @@ class SimulationParameters {
     constructor(backends, builders) {
         this.backend = 'rapier';
         this.prevBackend = 'rapier';
-        this.demo = 'primitives';
+        this.demo = 'collision groups';
         this.numVelocityIter = 4;
         this.numPositionIter = 1;
         this.running = true;
@@ -31,19 +30,19 @@ export class Testbed {
     constructor(RAPIER, builders, worker) {
         let backends = [
             "rapier",
-            "ammo.js",
-            "ammo.wasm",
-            "cannon.js",
-            "oimo.js",
-            PHYSX_BACKEND_NAME
+            // "ammo.js",
+            // "ammo.wasm",
+            // "cannon.js",
+            // "oimo.js",
+            // PHYSX_BACKEND_NAME
         ];
+        this.RAPIER = RAPIER;
         let parameters = new SimulationParameters(backends, builders);
         this.gui = new Gui(this, parameters);
         this.graphics = new Graphics();
         this.inhibitLookAt = false;
         this.parameters = parameters;
         this.worker = worker;
-        this.RAPIER = RAPIER;
         this.demoToken = 0;
         this.mouse = {x: 0, y: 0};
         this.switchToDemo(builders.keys().next().value);
@@ -72,9 +71,9 @@ export class Testbed {
 
             let now = new Date().getTime();
             let raycastMessage = this.raycastMessage();
-
+            let timestepTimeMS = this.world.timestep * 1000 * 0.75;
             /// Don't step the physics world faster than the real world.
-            if (now - this.lastMessageTime >= this.world.timestep * 1000) {
+            if (now - this.lastMessageTime >= timestepTimeMS) {
                 if (!!this.preTimestepAction && this.parameters.running) {
                     modifications = this.preTimestepAction();
                 }
@@ -90,12 +89,12 @@ export class Testbed {
                         modifications = this.preTimestepAction();
                     }
                     let stepMessage = this.stepMessage(modifications);
-                    
+
                     this.graphics.applyModifications(this.RAPIER, this.world, modifications);
                     this.worker.postMessage(raycastMessage);
                     this.worker.postMessage(stepMessage);
                     this.lastMessageTime = new Date().getTime();
-                }, now - this.lastMessageTime);
+                }, timestepTimeMS - (now - this.lastMessageTime));
             }
         };
 
@@ -136,25 +135,23 @@ export class Testbed {
         this.preTimestepAction = action;
     }
 
-    setWorld(world, bodies, colliders, joints) {
+    setWorld(world) {
         this.preTimestepAction = null;
         this.world = world;
         this.world.maxVelocityIterations = this.parameters.numVelocityIter;
         this.world.maxPositionIterations = this.parameters.numPositionIter;
         this.demoToken += 1;
-        this.joints = !!joints ? joints : new Array();
         this.gui.resetTiming();
 
-        colliders.forEach((coll, i, arr) => {
+        world.forEachCollider(coll => {
             this.graphics.addCollider(this.RAPIER, world, coll);
         });
 
-        let desc = extractWorldDescription(world, bodies, colliders, joints);
         let message = {
             type: 'setWorld',
             backend: this.parameters.backend,
             token: this.demoToken,
-            ...desc,
+            world: world.takeSnapshot(),
         };
         this.worker.postMessage(message);
         this.worker.postMessage(this.stepMessage());
