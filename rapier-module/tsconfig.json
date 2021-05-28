@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "outDir": "./pkg",
+    "module": "esnext",
+    "target": "esnext",
+    "lib": [
+      "esnext"
+    ],
+    "newLine": "lf",
+    "moduleResolution": "node",
+    "sourceMap": true,
+    "declaration": true
+  }
+}
