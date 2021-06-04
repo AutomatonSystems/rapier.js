@@ -1,10 +1,10 @@
-use crate::dynamics::RawRigidBodySet;
+use crate::dynamics::{RawIslandManager, RawRigidBodySet};
 use crate::geometry::{
     RawColliderSet, RawPointColliderProjection, RawRayColliderIntersection, RawRayColliderToi,
     RawShape, RawShapeColliderTOI,
 };
 use crate::math::{RawRotation, RawVector};
-use rapier::geometry::{ColliderHandle, InteractionGroups, Ray};
+use rapier::geometry::{ColliderHandle, Ray};
 use rapier::math::Isometry;
 use rapier::pipeline::QueryPipeline;
 use wasm_bindgen::prelude::*;
@@ -19,8 +19,13 @@ impl RawQueryPipeline {
         RawQueryPipeline(QueryPipeline::new())
     }
 
-    pub fn update(&mut self, bodies: &RawRigidBodySet, colliders: &RawColliderSet) {
-        self.0.update(&bodies.0, &colliders.0);
+    pub fn update(
+        &mut self,
+        islands: &RawIslandManager,
+        bodies: &RawRigidBodySet,
+        colliders: &RawColliderSet,
+    ) {
+        self.0.update(&islands.0, &bodies.0, &colliders.0);
     }
 
     pub fn castRay(
@@ -38,7 +43,7 @@ impl RawQueryPipeline {
             &ray,
             maxToi,
             solid,
-            InteractionGroups(groups),
+            crate::geometry::unpack_interaction_groups(groups),
             None,
         )?;
         Some(RawRayColliderToi { handle, toi })
@@ -59,7 +64,7 @@ impl RawQueryPipeline {
             &ray,
             maxToi,
             solid,
-            InteractionGroups(groups),
+            crate::geometry::unpack_interaction_groups(groups),
             None,
         )?;
         Some(RawRayColliderIntersection { handle, inter })
@@ -78,7 +83,7 @@ impl RawQueryPipeline {
     ) {
         let ray = Ray::new(rayOrig.0.into(), rayDir.0);
         let this = JsValue::null();
-        let rcallback = |handle, _, inter| {
+        let rcallback = |handle, inter| {
             let result = RawRayColliderIntersection { handle, inter };
             match callback.call1(&this, &JsValue::from(result)) {
                 Err(_) => true,
@@ -91,7 +96,7 @@ impl RawQueryPipeline {
             &ray,
             maxToi,
             solid,
-            InteractionGroups(groups),
+            crate::geometry::unpack_interaction_groups(groups),
             None,
             rcallback,
         )
@@ -104,14 +109,14 @@ impl RawQueryPipeline {
         shapeRot: &RawRotation,
         shape: &RawShape,
         groups: u32,
-    ) -> Option<usize> {
+    ) -> Option<u32> {
         let pos = Isometry::from_parts(shapePos.0.into(), shapeRot.0);
         self.0
             .intersection_with_shape(
                 &colliders.0,
                 &pos,
                 &*shape.0,
-                InteractionGroups(groups),
+                crate::geometry::unpack_interaction_groups(groups),
                 None,
             )
             .map(|h| h.into_raw_parts().0)
@@ -129,7 +134,7 @@ impl RawQueryPipeline {
                 &colliders.0,
                 &point.0.into(),
                 solid,
-                InteractionGroups(groups),
+                crate::geometry::unpack_interaction_groups(groups),
                 None,
             )
             .map(|(handle, proj)| RawPointColliderProjection { handle, proj })
@@ -144,7 +149,7 @@ impl RawQueryPipeline {
         callback: &js_sys::Function,
     ) {
         let this = JsValue::null();
-        let rcallback = |handle: ColliderHandle, _| match callback
+        let rcallback = |handle: ColliderHandle| match callback
             .call1(&this, &JsValue::from(handle.into_raw_parts().0 as u32))
         {
             Err(_) => true,
@@ -154,7 +159,7 @@ impl RawQueryPipeline {
         self.0.intersections_with_point(
             &colliders.0,
             &point.0.into(),
-            InteractionGroups(groups),
+            crate::geometry::unpack_interaction_groups(groups),
             None,
             rcallback,
         )
@@ -187,7 +192,7 @@ impl RawQueryPipeline {
                 &shapeVel.0,
                 &*shape.0,
                 maxToi,
-                InteractionGroups(groups),
+                crate::geometry::unpack_interaction_groups(groups),
                 None,
             )
             .map(|(handle, toi)| RawShapeColliderTOI { handle, toi })
@@ -204,7 +209,7 @@ impl RawQueryPipeline {
         callback: &js_sys::Function,
     ) {
         let this = JsValue::null();
-        let rcallback = |handle: ColliderHandle, _| match callback
+        let rcallback = |handle: ColliderHandle| match callback
             .call1(&this, &JsValue::from(handle.into_raw_parts().0 as u32))
         {
             Err(_) => true,
@@ -216,7 +221,7 @@ impl RawQueryPipeline {
             &colliders.0,
             &pos,
             &*shape.0,
-            InteractionGroups(groups),
+            crate::geometry::unpack_interaction_groups(groups),
             None,
             rcallback,
         )

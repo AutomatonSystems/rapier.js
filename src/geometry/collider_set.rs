@@ -1,16 +1,14 @@
-use crate::dynamics::RawRigidBodySet;
+use crate::dynamics::{RawIslandManager, RawRigidBodySet};
 use crate::geometry::RawShape;
 use crate::math::{RawRotation, RawVector};
-use rapier::dynamics::CoefficientCombineRule;
-use rapier::geometry::{Collider, ColliderBuilder, ColliderSet, InteractionGroups};
-use rapier::math::Isometry;
+use rapier::prelude::*;
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
 pub struct RawColliderSet(pub(crate) ColliderSet);
 
 impl RawColliderSet {
-    pub(crate) fn map<T>(&self, handle: usize, f: impl FnOnce(&Collider) -> T) -> T {
+    pub(crate) fn map<T>(&self, handle: u32, f: impl FnOnce(&Collider) -> T) -> T {
         let (collider, _) = self
             .0
             .get_unknown_gen(handle)
@@ -30,7 +28,7 @@ impl RawColliderSet {
         self.0.len()
     }
 
-    pub fn contains(&self, handle: usize) -> bool {
+    pub fn contains(&self, handle: u32) -> bool {
         self.0.get_unknown_gen(handle).is_some()
     }
 
@@ -47,17 +45,28 @@ impl RawColliderSet {
         isSensor: bool,
         collisionGroups: u32,
         solverGroups: u32,
-        parent: usize,
+        activeCollisionTypes: u16,
+        activeHooks: u32,
+        activeEvents: u32,
+        parent: u32,
         bodies: &mut RawRigidBodySet,
-    ) -> Option<usize> {
+    ) -> Option<u32> {
         if let Some((_, handle)) = bodies.0.get_unknown_gen(parent) {
             let pos = Isometry::from_parts(translation.0.into(), rotation.0);
             let mut builder = ColliderBuilder::new(shape.0.clone())
-                .position_wrt_parent(pos)
+                .position(pos)
                 .friction(friction)
                 .restitution(restitution)
-                .collision_groups(InteractionGroups(collisionGroups))
-                .solver_groups(InteractionGroups(solverGroups))
+                .collision_groups(super::unpack_interaction_groups(collisionGroups))
+                .solver_groups(super::unpack_interaction_groups(solverGroups))
+                .active_hooks(ActiveHooks::from_bits(activeHooks).unwrap_or(ActiveHooks::empty()))
+                .active_events(
+                    ActiveEvents::from_bits(activeEvents).unwrap_or(ActiveEvents::empty()),
+                )
+                .active_collision_types(
+                    ActiveCollisionTypes::from_bits(activeCollisionTypes)
+                        .unwrap_or(ActiveCollisionTypes::empty()),
+                )
                 .sensor(isSensor);
 
             if frictionCombineRule == CoefficientCombineRule::Average as u32 {
@@ -88,7 +97,7 @@ impl RawColliderSet {
 
             Some(
                 self.0
-                    .insert(collider, handle, &mut bodies.0)
+                    .insert_with_parent(collider, handle, &mut bodies.0)
                     .into_raw_parts()
                     .0,
             )
@@ -98,14 +107,20 @@ impl RawColliderSet {
     }
 
     /// Removes a collider from this set and wake-up the rigid-body it is attached to.
-    pub fn remove(&mut self, handle: usize, bodies: &mut RawRigidBodySet, wakeUp: bool) {
+    pub fn remove(
+        &mut self,
+        handle: u32,
+        islands: &mut RawIslandManager,
+        bodies: &mut RawRigidBodySet,
+        wakeUp: bool,
+    ) {
         if let Some((_, handle)) = self.0.get_unknown_gen(handle) {
-            self.0.remove(handle, &mut bodies.0, wakeUp);
+            self.0.remove(handle, &mut islands.0, &mut bodies.0, wakeUp);
         }
     }
 
     /// Checks if a collider with the given integer handle exists.
-    pub fn isHandleValid(&self, handle: usize) -> bool {
+    pub fn isHandleValid(&self, handle: u32) -> bool {
         self.0.get_unknown_gen(handle).is_some()
     }
 
