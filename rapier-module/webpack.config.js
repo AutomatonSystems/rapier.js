@@ -130,7 +130,7 @@ function compile({is2d}) {
             }
         },
         optimization: {
-            minimize: false
+            minimize: true
         },
         experiments: {
             asyncWebAssembly: true,

@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "build-rust-2d": "wasm-pack build ../rapier2d --target web --out-dir ../rapier-module/build/pkg2d",
-    "build-rust-3d": "wasm-pack build ../rapier3d --target web",
+    "build-rust-3d": "wasm-pack build ../rapier3d --target web --out-dir ../rapier-module/build/pkg3d",
     "build-rust": "npm run build-rust-2d && npm run build-rust-3d",
     "build": "npm run clean && npm run build-rust && npx webpack",
     "webpack": "npx webpack",
