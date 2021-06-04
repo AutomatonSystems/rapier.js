@@ -1,8 +1,9 @@
 import {RawPhysicsPipeline} from "../raw";
 import {Vector, VectorOps} from "../math";
-import {IntegrationParameters, JointSet, RigidBodyHandle, RigidBodySet, CCDSolver} from "../dynamics";
+import {IntegrationParameters, JointSet, RigidBodyHandle, RigidBodySet, CCDSolver, IslandManager} from "../dynamics";
 import {BroadPhase, ColliderHandle, ColliderSet, NarrowPhase} from "../geometry";
 import {EventQueue} from "./event_queue";
+import {PhysicsHooks} from "./physics_hooks";
 
 export class PhysicsPipeline {
     raw: RawPhysicsPipeline
@@ -19,6 +20,7 @@ export class PhysicsPipeline {
     public step(
         gravity: Vector,
         integrationParameters: IntegrationParameters,
+        islands: IslandManager,
         broadPhase: BroadPhase,
         narrowPhase: NarrowPhase,
         bodies: RigidBodySet,
@@ -26,6 +28,7 @@ export class PhysicsPipeline {
         joints: JointSet,
         ccdSolver: CCDSolver,
         eventQueue?: EventQueue,
+        hooks?: PhysicsHooks,
     ) {
         let rawG = VectorOps.intoRaw(gravity);
 
@@ -33,18 +36,23 @@ export class PhysicsPipeline {
             this.raw.stepWithEvents(
                 rawG,
                 integrationParameters.raw,
+                islands.raw,
                 broadPhase.raw,
                 narrowPhase.raw,
                 bodies.raw,
                 colliders.raw,
                 joints.raw,
                 ccdSolver.raw,
-                eventQueue.raw
+                eventQueue.raw,
+                hooks,
+                !!hooks ? hooks.filterContactPair : null,
+                !!hooks ? hooks.filterIntersectionPair : null,
             );
         } else {
             this.raw.step(
                 rawG,
                 integrationParameters.raw,
+                islands.raw,
                 broadPhase.raw,
                 narrowPhase.raw,
                 bodies.raw,
@@ -67,12 +75,14 @@ export class PhysicsPipeline {
      */
     public removeRigidBody(
         handle: RigidBodyHandle,
+        islands: IslandManager,
         bodies: RigidBodySet,
         colliders: ColliderSet,
         joints: JointSet,
     ) {
         this.raw.removeRigidBody(
             handle,
+            islands.raw,
             bodies.raw,
             colliders.raw,
             joints.raw
@@ -87,11 +97,13 @@ export class PhysicsPipeline {
      */
     public removeCollider(
         handle: ColliderHandle,
+        islands: IslandManager,
         bodies: RigidBodySet,
         colliders: ColliderSet,
     ) {
         this.raw.removeCollider(
             handle,
+            islands.raw,
             bodies.raw,
             colliders.raw,
         );
