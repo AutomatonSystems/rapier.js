@@ -1,6 +1,6 @@
 {
   "compilerOptions": {
-    "outDir": "./pkg",
+    "outDir": "./dist",
     "module": "esnext",
     "target": "esnext",
     "lib": [

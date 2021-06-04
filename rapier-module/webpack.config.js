@@ -36,7 +36,7 @@ function copyAndReplace({is2d}) {
         plugins: [
             new CopyPlugin({
                 patterns: [
-                    // copy src.ts into pkg for compiling,
+                    // copy src.ts into build dir for compiling,
                     // remove sections wrapped in #ifdef DIMx ... #endif
                     // add init() function to rapier.ts
                     {
@@ -61,7 +61,7 @@ function copyAndReplace({is2d}) {
                             let config = JSON.parse(content.toString());
                             config.name = `@dimforge/rapier${dim}-module`;
                             config.description += "";
-							config.type = "module";
+                            config.type = "module";
                             config.types = "rapier.d.ts";
                             config.main = "rapier.js";
                             config.files = ["*"];
